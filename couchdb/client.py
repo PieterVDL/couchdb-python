@@ -919,6 +919,30 @@ class Database(object):
         return PermanentView(self.resource(*path), '/'.join(path),
                              wrapper=wrapper)(**options)
 
+    def spatial_view(self, name, wrapper=None, **options):
+        """Create a view for for predefined geocouch spatial data
+        See https://github.com/couchbase/geocouch/wiki/Spatial-Views-API for more details on spatial views creation.
+
+        :param name: the name of the spatial view; for custom views, use the format
+                     ``design_docid/spatial viewname``, that is, the document ID of the
+                     design document and the name of the view, separated by a
+                     slash
+        :param wrapper: an optional callable that should be used to wrap the
+                        result rows
+        :param options: optional query string parameters
+        :return: the spatial view results
+        :rtype: `ViewResults`
+        """
+        path = _path_from_name(name, '_spatial')
+        # Add keyaliases option on options argument.
+        # Instead of startkey and endkey start_range and end_range are required
+        # by the geolocation module.
+        # Transformation from startkey and endkey to appropriate values are
+        # in final encoding function.
+        options["keyaliases"] = {"key":"key", "startkey":"start_range", "endkey":"end_range"}
+        return PermanentView(self.resource(*path), '/'.join(path),
+                             wrapper=wrapper)(**options)
+
     def iterview(self, name, batch, wrapper=None, **options):
         """Iterate the rows in a view, fetching rows in batches and yielding
         one row at a time.
@@ -1171,10 +1195,24 @@ def _encode_view_options(options):
     view/list function.
     """
     retval = {}
+    # Special case for spatial views treated below.
+    # Spatial view slices requires start_range and end_range instead of startkey.
+    # use of non slice selection should raise an error (not implemented).
+    # The keyaliases option set by spatial_view creation holds the association
+    # of key names.
+    # We agree this is more of a hack and should be implemented more properly.
+    
+    if 'keyaliases' in options:
+        options = options.copy()
+        keyaliases = options.pop('keyaliases')
+    else:
+        keyaliases = {"key":"key", "startkey":"startkey", "endkey":"endkey"}
     for name, value in options.items():
         if name in ('key', 'startkey', 'endkey') \
                 or not isinstance(value, util.strbase):
             value = json.encode(value)
+        if name in keyaliases:
+            name = keyaliases[name]
         retval[name] = value
     return retval
 
@@ -1182,6 +1220,7 @@ def _encode_view_options(options):
 def _call_viewlike(resource, options):
     """Call a resource that takes view-like options.
     """
+    print(options)
     if 'keys' in options:
         options = options.copy()
         keys = {'keys': options.pop('keys')}
