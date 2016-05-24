@@ -1220,7 +1220,6 @@ def _encode_view_options(options):
 def _call_viewlike(resource, options):
     """Call a resource that takes view-like options.
     """
-    print(options)
     if 'keys' in options:
         options = options.copy()
         keys = {'keys': options.pop('keys')}
